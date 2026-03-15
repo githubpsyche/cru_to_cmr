@@ -1,0 +1,30 @@
+project:
+  type: manuscript
+  output-dir: _output
+  render: 
+    - index.qmd
+
+manuscript:
+  code-links: repo
+
+execute:
+  freeze: auto
+
+format:
+  html:
+    default: true
+    toc: true
+    theme: darkly
+    include-before-body:
+      - text: "The authors are grateful to Gordan Logan and Adam Osth for their constructive feedback on earlier versions of this manuscript."
+  apaquarto-pdf:
+    nocorrespondence: true
+    donotrepeattitle: true
+    draftfirst: true
+    filters:
+      - abstract-section
+  apaquarto-docx:
+    nocorrespondence: true
+    donotrepeattitle: true
+
+format-links: [apaquarto-docx, apaquarto-pdf]
