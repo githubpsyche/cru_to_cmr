@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cru_to_cmr"
+version = "0.1.0"
+description = "CRU-to-CMR factorial model comparison"
+requires-python = ">=3.12"
+dependencies = [
+    "h5py>=3.12.1",
+    "jax>=0.4.38",
+    "jaxtyping>=0.2.36",
+    "numba>=0.61.0",
+    "scipy==1.15.0",
+    "simple-pytree>=0.2.2",
+    "tabulate>=0.9.0",
+    "tqdm>=4.67.1",
+    "matplotlib",
+    "numpy",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["cru_to_cmr"]
