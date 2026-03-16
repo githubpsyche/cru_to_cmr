@@ -2,9 +2,9 @@
 
 ## Stage 1: Generate figures
 
-- `analyses/render_free_recall.ipynb` dispatches `templates/free_recall_fitting.ipynb` via papermill for each model config → generates free recall figures (tif + png) into `figures/`
-- `analyses/render_serial_recall.ipynb` dispatches `templates/serial_recall_fitting.ipynb` → generates serial recall figures into `figures/`
-- `analyses/render_parameter_shifting.ipynb` dispatches `templates/parameter_shifting.ipynb` → generates parameter shifting figures into `figures/shifting/`
+- `analyses/render_free_recall.ipynb` dispatches `templates/free_recall_fitting.ipynb` via papermill → PNGs to `figures/png/`, TIFs to `figures/tif/`
+- `analyses/render_serial_recall.ipynb` dispatches `templates/serial_recall_fitting.ipynb` → PNGs to `figures/png/`, TIFs to `figures/tif/`
+- `analyses/render_parameter_shifting.ipynb` dispatches `templates/parameter_shifting.ipynb` → PNGs to `figures/shifting/`
 - All templates load pre-computed fits from `fits/` and data from `data/`
 - Set `redo_fits = False` in orchestrator shared_params to skip fitting and only regenerate figures
 
@@ -18,6 +18,10 @@
 - `analyses/rename_figures.py` reads `figure_paths.md` and copies tifs into `submission/` as `Figure1a.tif`, `Figure1b.tif`, etc.
 - Pure copy operation, re-runnable if source tifs exist
 
-## Validation
+## Stage 4: Render manuscript
 
-- To validate: re-run Stage 1 + Stage 3, then diff `submission/` against originals in `jaxcmr/projects/cru_to_cmr/indexed_figures/`
+```bash
+quarto render --to html,apaquarto-docx,apaquarto-pdf
+```
+
+Output to `docs/`. HTML includes "Other Formats" links to PDF and DOCX.
