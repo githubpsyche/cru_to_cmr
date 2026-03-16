@@ -131,11 +131,11 @@ class TemporalContext(Pytree):
         """
         return cls(item_count, item_count + item_count + 1)
 
-    @classmethod
-    def init(cls, item_count: int) -> "TemporalContext":
-        """Returns context sized for ``item_count`` items.
 
-        Args:
-            item_count: Number of items in the context model.
-        """
-        return cls(item_count, item_count + 1)
+def init(item_count: int) -> "TemporalContext":
+    """Returns context sized for ``item_count`` items.
+
+    Args:
+        item_count: Number of items in the context model.
+    """
+    return TemporalContext(item_count, item_count + 1)

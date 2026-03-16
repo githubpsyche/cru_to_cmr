@@ -1,4 +1,4 @@
-"""Type definitions and protocols for the jaxcmr package.
+"""Type definitions and protocols for the cru_to_cmr package.
 
 Defines array type aliases (via jaxtyping), model protocols
 (``MemorySearch``, ``TrialSimulator``), dataset type dictionaries
@@ -39,11 +39,11 @@ __all__ = [
     "Shaped",
     "PRNGKeyArray",
     "MemorySearch",
-    "Memory",
     "Context",
     "LossFnGenerator",
     "FitResult",
     "TrialSimulator",
+    "MemorySearchModelFactory",
 ]
 
 
@@ -86,7 +86,7 @@ class RecallDataset(TypedDict):
 
     # OPTIONAL FIELDS, REQUIRED FOR SEMANTIC ANALYSIS
     pres_itemids: Integer[Array, "n_trials num_presented"]
-    """Per-trial cross-list item IDs (shape: [n_trials, num_presented]).
+    """Per-trial cross-list item IDs (shape: [n_trials, num_presented]). 
     These IDs reference a global word pool and may repeat across trials."""
 
     rec_itemids: NotRequired[Integer[Array, "n_trials num_recalled"]]
@@ -104,50 +104,6 @@ class RecallDataset(TypedDict):
 
     list_type: NotRequired[Integer[Array, "n_trials 1"]]
     """List type for each trial (shape: [n_trials, 1])."""
-
-
-@runtime_checkable
-class Memory(Protocol):
-    state: Float[Array, " input_size output_size"]
-
-    @property
-    def input_size(self) -> int:
-        "The size of the input feature space."
-        ...
-
-    @property
-    def output_size(self) -> int:
-        "The size of the output feature space."
-        ...
-
-    def associate(
-        self,
-        in_pattern: Float[Array, " input_size"],
-        out_pattern: Float[Array, " output_size"],
-        learning_rate: Float_,
-    ) -> "Memory":
-        """Return the updated memory after associating input and output patterns.
-
-        Args:
-            memory: the current memory model.
-            input_pattern: a feature pattern for an input.
-            out_pattern: a feature pattern for an output.
-            learning_rate: the learning rate parameter.
-        """
-        ...
-
-    def probe(
-        self,
-        in_pattern: Float[Array, " input_size"],
-    ) -> Float[Array, " output_size"]:
-        """Return the output pattern associated with the input pattern in memory.
-
-        Args:
-            memory: the current memory state.
-            in_pattern: the input feature pattern.
-            activation_scale: the activation scaling factor.
-        """
-        ...
 
 
 @runtime_checkable

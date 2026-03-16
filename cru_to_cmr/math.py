@@ -14,7 +14,6 @@ __all__ = [
     "lb",
     "power_scale",
     "exponential_primacy_decay",
-    "exponential_stop_probability",
     "normalize_magnitude",
 ]
 
@@ -42,19 +41,6 @@ def exponential_primacy_decay(
         primacy_decay: the decay factor for primacy effect.
     """
     return primacy_scale * jnp.exp(-primacy_decay * study_index) + 1
-
-
-def exponential_stop_probability(
-    stop_probability_scale: Float_, stop_probability_growth: Float_, recall_total: Int_
-):
-    """Returns the exponential stop probability for the specified recall event.
-
-    Args:
-        stop_probability_scale: the scale factor for stop probability.
-        stop_probability_growth: the growth factor for stop probability.
-        recall_total: the total number of items recalled.
-    """
-    return stop_probability_scale * jnp.exp(recall_total * stop_probability_growth)
 
 
 def normalize_magnitude(

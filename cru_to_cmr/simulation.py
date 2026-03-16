@@ -7,7 +7,7 @@ dataset-level simulation with optional study-phase replay.
 
 """
 
-from typing import Mapping, Optional, Type
+from typing import Mapping, Optional, Sequence, Type
 
 import jax.numpy as jnp
 import numpy as np
@@ -382,3 +382,52 @@ def simulate_h5_from_h5(
     # Reindex study positions
     sim_h5["recalls"] = _reindex_recalls(recalls, sim_h5["pres_itemnos"], size)
     return sim_h5
+
+
+def parameter_shifted_simulate_h5_from_h5(
+    model_factory: Type[MemorySearchModelFactory],
+    dataset: RecallDataset,
+    features: Optional[Float[Array, " word_pool_items features_count"]],
+    parameters: dict[str, Float[Array, " subject_count"]],
+    trial_mask: Bool[Array, " trial_count"],
+    experiment_count: int,
+    varied_parameter: str,
+    parameter_values: Sequence[float],
+    rng: PRNGKeyArray,
+    size: int = 3,
+    simulate_trial_fn: TrialSimulator = simulate_study_and_free_recall,
+) -> Sequence[RecallDataset]:
+    """Simulate multiple datasets by sweeping a single parameter."""
+    template = preallocate_for_h5_dataset(dataset, trial_mask, experiment_count)
+    simulator = MemorySearchSimulator(
+        model_factory, template, features, simulate_trial_fn
+    )
+    total_trials = template["subject"].size
+    trial_indices = jnp.arange(total_trials, dtype=jnp.int32)
+    subject_ids = template["subject"].flatten()
+    template_without_recalls = {
+        key: value for key, value in template.items() if key != "recalls"
+    }
+
+    def run_for_parameters(
+        param_map: Mapping[str, Float_], sweep_rng: PRNGKeyArray
+    ) -> RecallDataset:
+        rngs = random.split(sweep_rng, total_trials)
+        parameter_indices = _parameter_indices_for_subjects(subject_ids, param_map)
+        recalls = vmap(simulator.simulate_trial, in_axes=(0, 0, None, 0))(
+            trial_indices, parameter_indices, param_map, rngs
+        )
+        return template_without_recalls | {
+            "recalls": _reindex_recalls(recalls, template["pres_itemnos"], size)
+        }
+
+    results: list[RecallDataset] = []
+    for value in parameter_values:
+        rng, this_rng = random.split(rng)
+        swept_params = {
+            **parameters,
+            varied_parameter: jnp.full_like(parameters[varied_parameter], value),
+        }
+        results.append(run_for_parameters(swept_params, this_rng))
+
+    return results

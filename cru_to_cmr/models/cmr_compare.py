@@ -15,19 +15,18 @@ from simple_pytree import Pytree
 
 from cru_to_cmr.math import (
     exponential_primacy_decay,
-    exponential_stop_probability,
     lb,
     power_scale,
 )
-from cru_to_cmr.components.context import TemporalContext
-from cru_to_cmr.components.linear_memory import LinearMemory
+import cru_to_cmr.components.context as TemporalContext
+import cru_to_cmr.components.linear_memory as LinearMemory
+from cru_to_cmr.components.termination import PositionalTermination
 from cru_to_cmr.typing import (
     Array,
-    Context,
     Float,
     Float_,
     Int_,
-    Memory,
+    Integer,
     MemorySearch,
     RecallDataset,
 )
@@ -36,7 +35,7 @@ from cru_to_cmr.typing import (
 __all__ = [
     "CMR",
     "FlatChoiceModel",
-    "CMRFactory",
+    "make_factory",
 ]
 
 class CMR(Pytree):
@@ -47,6 +46,10 @@ class CMR(Pytree):
         list_length: int,
         parameters: Mapping[str, Float_],
         decision_strategy,
+        mfc_create_fn=LinearMemory.init_mfc,
+        mcf_create_fn=LinearMemory.init_mcf,
+        context_create_fn=TemporalContext.init,
+        termination_policy_create_fn=PositionalTermination,
     ):
         self.encoding_drift_rate_max = parameters["encoding_drift_rate"]
         self.start_drift_rate = parameters["start_drift_rate"]
@@ -59,10 +62,6 @@ class CMR(Pytree):
         self.mcf_sensitivity = parameters["choice_sensitivity"]
         self.allow_repeated_recalls = parameters.get("allow_repeated_recalls", False)
 
-        # specific to item-independent stop rule
-        self.stop_probability_scale = parameters["stop_probability_scale"]
-        self.stop_probability_growth = parameters["stop_probability_growth"]
-
         # specific to cru
         # self.item_sensitivity_max = parameters["item_sensitivity_max"]
         # self.item_sensitivity_decrease = parameters["item_sensitivity_decrease"]
@@ -71,26 +70,13 @@ class CMR(Pytree):
         self.item_count = list_length
         self.encoding_probabilities = jnp.ones(list_length, dtype=float)
         self.items = jnp.eye(self.item_count)
-        self._stop_probability = exponential_stop_probability(
-            self.stop_probability_scale,
-            self.stop_probability_growth,
-            jnp.arange(self.item_count),
-        )
         self._mcf_learning_rate = exponential_primacy_decay(
             jnp.arange(list_length), self.primacy_scale, self.primacy_decay
         )
-        self.context: Context = TemporalContext.init(list_length)
-        self.mfc: Memory = LinearMemory.init_mfc(
-            list_length,
-            self.context.size,
-            parameters["learning_rate"],
-        )
-        self.mcf: Memory = LinearMemory.init_mcf(
-            list_length,
-            self.context.size,
-            parameters["item_support"],
-            parameters["shared_support"],
-        )
+        self.context = context_create_fn(list_length)
+        self.mfc = mfc_create_fn(list_length, parameters, self.context)
+        self.mcf = mcf_create_fn(list_length, parameters, self.context)
+        self.termination_policy = termination_policy_create_fn(list_length, parameters)
         self.decision_strategy = decision_strategy
         self.recalls = jnp.zeros(self.item_count, dtype=int)
         self.recallable = jnp.zeros(self.item_count, dtype=bool)
@@ -201,15 +187,7 @@ class CMR(Pytree):
 
     def stop_probability(self) -> Float[Array, ""]:
         """Returns probability of stopping retrieval given model state"""
-        total_recallable = jnp.sum(self.recallable)
-        return lax.cond(
-            jnp.logical_or(total_recallable == 0, ~self.is_active),
-            true_fun=lambda: 1.0,
-            false_fun=lambda: jnp.minimum(
-                1.0 - (lb * total_recallable),
-                self._stop_probability[self.recall_total],
-            ),
-        )
+        return self.termination_policy.stop_probability(self)
 
     def item_probability(self, item_index: Int_) -> Float[Array, ""]:
         """Return the probability of retrieval of an item at the specified index.
@@ -276,26 +254,48 @@ class FlatChoiceModel(Pytree):
         return supports / jnp.sum(supports)
 
 
-class CMRFactory:
-    def __init__(
-        self,
-        dataset: RecallDataset,
-        features: Optional[Float[Array, " word_pool_items features_count"]],
-    ) -> None:
-        """Initialize the factory with the specified trials and trial data."""
-        self.max_list_length = np.max(dataset["listLength"]).item()
+def make_factory(
+    decision_strategy_fn=FlatChoiceModel,
+    mfc_create_fn=LinearMemory.init_mfc,
+    mcf_create_fn=LinearMemory.init_mcf,
+    context_create_fn=TemporalContext.init,
+    termination_policy_create_fn=PositionalTermination,
+):
+    class CMRModelFactory:
+        def __init__(
+            self,
+            dataset: RecallDataset,
+            features: Optional[Float[Array, " word_pool_items features_count"]],
+        ) -> None:
+            """Initialize the factory with the specified trials and trial data."""
+            self.max_list_length = np.max(dataset["listLength"]).item()
 
-    def create_trial_model(
-        self,
-        trial_index: Int_,
-        parameters: Mapping[str, Float_],
-    ) -> MemorySearch:
-        """Create a new memory search model with the specified parameters for the specified trial."""
-        return CMR(self.max_list_length, parameters, FlatChoiceModel())
+            def model_create_fn(list_length, parameters):
+                return CMR(
+                    list_length,
+                    parameters,
+                    decision_strategy_fn(),
+                    mfc_create_fn,
+                    mcf_create_fn,
+                    context_create_fn,
+                    termination_policy_create_fn,
+                )
 
-    def create_model(
-        self,
-        parameters: Mapping[str, Float_],
-    ) -> MemorySearch:
-        """Create a new memory search model with the specified parameters."""
-        return CMR(self.max_list_length, parameters, FlatChoiceModel())
+            self.model_create_fn = model_create_fn
+
+        def create_trial_model(
+            self,
+            trial_index: Integer[Array, ""],
+            parameters: Mapping[str, Float_],
+        ) -> MemorySearch:
+            """Create a new memory search model with the specified parameters for the specified trial."""
+            return self.model_create_fn(self.max_list_length, parameters)
+
+        def create_model(
+            self,
+            parameters: Mapping[str, Float_],
+        ) -> MemorySearch:
+            """Create a new memory search model with the specified parameters."""
+            return self.model_create_fn(self.max_list_length, parameters)
+
+    return CMRModelFactory

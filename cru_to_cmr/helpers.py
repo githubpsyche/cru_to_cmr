@@ -7,7 +7,8 @@ used across the package.
 """
 
 import importlib
-from typing import Callable, Optional, Sequence
+from pathlib import Path
+from typing import Callable, Iterable, List, Optional, Sequence
 
 import h5py
 import jax.numpy as jnp
@@ -18,6 +19,8 @@ from cru_to_cmr.typing import Array, Bool, Float, Integer, Real, RecallDataset
 
 __all__ = [
     "all_rows_identical",
+    "find_project_root",
+    "format_floats",
     "log_likelihood",
     "import_from_string",
     "generate_trial_mask",
@@ -26,6 +29,22 @@ __all__ = [
     "find_max_list_length",
     "apply_by_subject",
 ]
+
+
+def find_project_root(marker: str = ".git") -> str:
+    """Finds the project root by traversing upwards from cwd
+    until a directory containing `marker` is found."""
+    start = Path.cwd()
+    for path in [start, *start.parents]:
+        if (path / marker).exists():
+            return str(path)
+    raise FileNotFoundError(f"Could not find project root containing {marker}.")
+
+
+def format_floats(iterable: Iterable[float], precision: int = 2) -> List[str]:
+    """Formats a list of floats to a specified precision."""
+    format_str = f"{{:.{precision}f}}"
+    return [format_str.format(x) for x in iterable]
 
 
 def all_rows_identical(arr: Real[Array, " x y"]) -> bool:

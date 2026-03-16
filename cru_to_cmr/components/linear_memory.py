@@ -73,57 +73,53 @@ class LinearMemory(Pytree):
         """
         return self.replace(state=self.state.at[index].set(0))
 
-    @classmethod
-    def init_mfc(
-        cls,
-        list_length: int,
-        parameters: Mapping[str, Float_],
-        context: Context,
-    ) -> "LinearMemory":
-        """Returns linear item-to-context memory model.
+def init_mfc(
+    list_length: int,
+    parameters: Mapping[str, Float_],
+    context: Context,
+) -> "LinearMemory":
+    """Returns linear item-to-context memory model.
 
-        Initially, each item links to a unique context unit with weight ``1 - learning_rate``.
-        To allow out-of-list contexts, set the context builder to include an additional unit.
+    Initially, each item links to a unique context unit with weight ``1 - learning_rate``.
+    To allow out-of-list contexts, set the context builder to include an additional unit.
 
-        Args:
-            list_length: Number of items.
-            parameters: Model parameter mapping.
-            context: Context instance providing feature dimension.
-        """
-        context_feature_count = context.size
-        learning_rate = parameters["learning_rate"]
-        item_feature_count = list_length
-        return cls(
-            jnp.eye(item_feature_count, context_feature_count, 1) * (1 - learning_rate),
-        )
+    Args:
+        list_length: Number of items.
+        parameters: Model parameter mapping.
+        context: Context instance providing feature dimension.
+    """
+    context_feature_count = context.size
+    learning_rate = parameters["learning_rate"]
+    item_feature_count = list_length
+    return LinearMemory(
+        jnp.eye(item_feature_count, context_feature_count, 1) * (1 - learning_rate),
+    )
 
-    @classmethod
-    def init_mcf(
-        cls,
-        list_length: int,
-        parameters: Mapping[str, Float_],
-        context: Context,
-    ) -> "LinearMemory":
-        """Returns linear context-to-item memory model.
+def init_mcf(
+    list_length: int,
+    parameters: Mapping[str, Float_],
+    context: Context,
+) -> "LinearMemory":
+    """Returns linear context-to-item memory model.
 
-        In-list context units associate with all items via ``shared_support`` and
-        receive additional ``item_support`` for their corresponding item. Start-of-list
-        and out-of-list units begin with zero associations.
+    In-list context units associate with all items via ``shared_support`` and
+    receive additional ``item_support`` for their corresponding item. Start-of-list
+    and out-of-list units begin with zero associations.
 
-        Args:
-            list_length: Number of items.
-            parameters: Model parameter mapping.
-            context: Context instance providing feature dimension.
-        """
-        item_support = parameters["item_support"]
-        shared_support = parameters["shared_support"]
+    Args:
+        list_length: Number of items.
+        parameters: Model parameter mapping.
+        context: Context instance providing feature dimension.
+    """
+    item_support = parameters["item_support"]
+    shared_support = parameters["shared_support"]
 
-        item_count = list_length
-        context_feature_count = context.size
+    item_count = list_length
+    context_feature_count = context.size
 
-        base_memory = jnp.full((context_feature_count - 1, item_count), shared_support)
-        base_memory = lax.fori_loop(
-            0, item_count, lambda i, m: m.at[i, i].set(item_support), base_memory
-        )
-        start_list = jnp.zeros((1, item_count))
-        return cls(jnp.vstack((start_list, base_memory)))
+    base_memory = jnp.full((context_feature_count - 1, item_count), shared_support)
+    base_memory = lax.fori_loop(
+        0, item_count, lambda i, m: m.at[i, i].set(item_support), base_memory
+    )
+    start_list = jnp.zeros((1, item_count))
+    return LinearMemory(jnp.vstack((start_list, base_memory)))

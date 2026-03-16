@@ -17,8 +17,9 @@ from cru_to_cmr.math import (
     lb,
     power_scale,
 )
-from cru_to_cmr.components.context import TemporalContext
-from cru_to_cmr.components.linear_memory import LinearMemory
+import cru_to_cmr.components.context as TemporalContext
+import cru_to_cmr.components.linear_memory as LinearMemory
+from cru_to_cmr.components.termination import PositionalTermination
 from cru_to_cmr.typing import (
     Array,
     Float,
@@ -32,10 +33,53 @@ from cru_to_cmr.typing import (
 
 __all__ = [
     "CMR",
-    "BaseCMR",
-    "BaseCMRFactory",
+    "make_factory",
     "letter_similarities",
 ]
+
+
+class CompetitiveTermination(Pytree):
+    """Termination via competition: stop probability is the activation
+    of the termination item relative to total activation."""
+
+    def __init__(
+        self,
+        list_length: int,
+        parameters: Mapping[str, Float_],
+    ) -> None:
+        pass
+
+    def stop_probability(self, model) -> Float:
+        total_recallable = jnp.sum(model.recallable)
+        decision_strategy = lambda i, a: a[i] / jnp.sum(a)
+
+        return lax.cond(
+            jnp.logical_or(total_recallable == 0, ~model.is_active),
+            true_fun=lambda: 1.0,
+            false_fun=lambda: jnp.minimum(
+                1.0 - (lb * total_recallable),
+                decision_strategy(model.item_count, model.activations()),
+            ),
+        )
+
+
+def _init_context_compterm_omnibus(list_length):
+    """Context create_fn: uses LETTER_COUNT=26."""
+    LETTER_COUNT = 26
+    return TemporalContext.init(LETTER_COUNT)
+
+
+def _init_mfc_compterm_omnibus(list_length, parameters, context):
+    """MFC create_fn: uses LETTER_COUNT+1=27 items for termination item."""
+    LETTER_COUNT = 26
+    return LinearMemory.init_mfc(LETTER_COUNT + 1, parameters, context)
+
+
+def _init_mcf_compterm_omnibus(list_length, parameters, context):
+    """MCF create_fn: uses LETTER_COUNT+1=27 items for termination item."""
+    LETTER_COUNT = 26
+    return LinearMemory.init_mcf(LETTER_COUNT + 1, parameters, context)
+
 
 class CMR(Pytree):
     """The Context Maintenance and Retrieval (CMR) model of memory search."""
@@ -45,6 +89,10 @@ class CMR(Pytree):
         list_length: int,
         parameters: Mapping[str, Float_],
         distances: Integer[Array, " word_pool_items word_pool_items"],
+        mfc_create_fn=_init_mfc_compterm_omnibus,
+        mcf_create_fn=_init_mcf_compterm_omnibus,
+        context_create_fn=_init_context_compterm_omnibus,
+        termination_policy_create_fn=CompetitiveTermination,
     ):
         self.encoding_drift_rate_max = parameters["encoding_drift_rate"]
         self.start_drift_rate = parameters["start_drift_rate"]
@@ -69,18 +117,10 @@ class CMR(Pytree):
         self._mcf_learning_rate = exponential_primacy_decay(
             jnp.arange(list_length), self.primacy_scale, self.primacy_decay
         )
-        self.context = TemporalContext.init(self.item_count)
-        self.mfc = LinearMemory.init_mfc(
-            self.item_count + 1,
-            self.context.size,
-            parameters["learning_rate"],
-        )
-        self.mcf = LinearMemory.init_mcf(
-            self.item_count + 1,
-            self.context.size,
-            parameters["item_support"],
-            parameters["shared_support"],
-        )
+        self.context = context_create_fn(list_length)
+        self.mfc = mfc_create_fn(list_length, parameters, self.context)
+        self.mcf = mcf_create_fn(list_length, parameters, self.context)
+        self.termination_policy = termination_policy_create_fn(list_length, parameters)
         self.distances = distances
         self.slip_matrix = jnp.eye(self.item_count)
         self.recalls = jnp.zeros(self.item_count, dtype=int)
@@ -161,7 +201,7 @@ class CMR(Pytree):
                 termination_item, self.context.state, self.mfc_learning_rate
             ),
             mcf=self.mcf.associate(
-                self.context.state, termination_item, self.mcf_learning_rate
+                self.context.state, termination_item, self.mfc_learning_rate
             ),
         )
 
@@ -207,17 +247,7 @@ class CMR(Pytree):
 
     def stop_probability(self) -> Float[Array, ""]:
         """Returns probability of stopping retrieval given model state"""
-        total_recallable = jnp.sum(self.recallable)
-        decision_strategy = lambda i, a: a[i] / jnp.sum(a)
-
-        return lax.cond(
-            jnp.logical_or(total_recallable == 0, ~self.is_active),
-            true_fun=lambda: 1.0,
-            false_fun=lambda: jnp.minimum(
-                1.0 - (lb * total_recallable),
-                decision_strategy(self.item_count, self.activations()),
-            ),
-        )
+        return self.termination_policy.stop_probability(self)
 
     def item_probability(self, item_index: Int_) -> Float[Array, ""]:
         """Return the probability of retrieval of an item at the specified index.
@@ -254,39 +284,51 @@ class CMR(Pytree):
         return vmap(self.outcome_probability)(self.item_arange)
 
 
-def BaseCMR(
-    list_length: int,
-    parameters: Mapping[str, Float_],
-    distances: Integer[Array, " word_pool_items word_pool_items"],
-) -> CMR:
-    """Creates a regular CMR model with linear associative $M^{FC}$ and $M^{CF}$ memories."""
-    return CMR(list_length, parameters, distances)
+def make_factory(
+    mfc_create_fn=_init_mfc_compterm_omnibus,
+    mcf_create_fn=_init_mcf_compterm_omnibus,
+    context_create_fn=_init_context_compterm_omnibus,
+    termination_policy_create_fn=CompetitiveTermination,
+):
+    class CMRModelFactory:
+        def __init__(
+            self,
+            dataset: RecallDataset,
+            features: Optional[Float[Array, " word_pool_items features_count"]],
+        ) -> None:
+            """Initialize the factory with the specified trials and trial data."""
+            self.max_list_length = np.max(dataset["listLength"]).item()
+            self.distances = 1 / (letter_similarities + lb)
 
+            def model_create_fn(list_length, parameters):
+                return CMR(
+                    list_length,
+                    parameters,
+                    self.distances,
+                    mfc_create_fn,
+                    mcf_create_fn,
+                    context_create_fn,
+                    termination_policy_create_fn,
+                )
 
-class BaseCMRFactory:
-    def __init__(
-        self,
-        dataset: RecallDataset,
-        features: Optional[Float[Array, " word_pool_items features_count"]],
-    ) -> None:
-        """Initialize the factory with the specified trials and trial data."""
-        self.max_list_length = np.max(dataset["listLength"]).item()
-        self.distances = 1 / (letter_similarities + lb)
+            self.model_create_fn = model_create_fn
 
-    def create_model(
-        self,
-        parameters: Mapping[str, Float_],
-    ) -> MemorySearch:
-        """Create a new memory search model with the specified parameters."""
-        return BaseCMR(self.max_list_length, parameters, self.distances)
+        def create_model(
+            self,
+            parameters: Mapping[str, Float_],
+        ) -> MemorySearch:
+            """Create a new memory search model with the specified parameters."""
+            return self.model_create_fn(self.max_list_length, parameters)
 
-    def create_trial_model(
-        self,
-        trial_index: Int_,
-        parameters: Mapping[str, Float_],
-    ) -> MemorySearch:
-        """Create a new memory search model with the specified parameters for the specified trial."""
-        return BaseCMR(self.max_list_length, parameters, self.distances)
+        def create_trial_model(
+            self,
+            trial_index: Int_,
+            parameters: Mapping[str, Float_],
+        ) -> MemorySearch:
+            """Create a new memory search model with the specified parameters for the specified trial."""
+            return self.model_create_fn(self.max_list_length, parameters)
+
+    return CMRModelFactory
 
 
 letter_similarities = jnp.array(

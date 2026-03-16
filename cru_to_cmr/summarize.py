@@ -9,12 +9,18 @@ AIC/BIC model comparison statistics.
 from typing import Callable, Optional
 
 import numpy as np
-from scipy.stats import t
+import pandas as pd
+from scipy.stats import t, ttest_rel
 
 
 
 __all__ = [
+    "calculate_aic",
+    "calculate_aic_weights",
+    "calculate_bic_scores",
     "calculate_ci",
+    "generate_t_p_matrices",
+    "winner_comparison_matrix",
     "add_summary_lines",
     "summarize_parameters",
 ]
@@ -188,3 +194,88 @@ def summarize_parameters(
         )
 
     return md_table
+
+
+def generate_t_p_matrices(results: list[dict]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Returns matrices of t-values and p-values from paired t-tests on model fitness results."""
+    model_names = [model["name"] for model in results]
+    num_models = len(model_names)
+    t_values = np.zeros((num_models, num_models))
+    p_values_less = np.zeros((num_models, num_models))
+    for i, model_a in enumerate(results):
+        for j, model_b in enumerate(results):
+            t_val, p_less = ttest_rel(
+                model_a["fitness"], model_b["fitness"], alternative="less"
+            )
+            t_values[i, j] = t_val
+            p_values_less[i, j] = p_less
+    df_t = pd.DataFrame(t_values, index=model_names, columns=model_names).replace(np.nan, "")
+    df_p = pd.DataFrame(p_values_less, index=model_names, columns=model_names).replace(np.nan, "")
+    return df_t, df_p
+
+
+def _subjectwise_aic(model: dict) -> np.ndarray:
+    """Return per-subject AIC values: AIC_s = 2k + 2*NLL_s."""
+    fitness = np.asarray(model["fitness"], dtype=float)
+    penalty = 2.0 * len(model.get("free", []))
+    return 2.0 * fitness + penalty
+
+
+def winner_comparison_matrix(results: list[dict]) -> pd.DataFrame:
+    """Returns matrix of fractions where AIC of model i < model j."""
+    model_names = [model["name"] for model in results]
+    num_models = len(model_names)
+    penalized = [_subjectwise_aic(model) for model in results]
+    comparison_matrix = np.zeros((num_models, num_models))
+    for i in range(num_models):
+        for j in range(num_models):
+            if i != j:
+                comparison_matrix[i, j] = float(np.mean(penalized[i] < penalized[j]))
+            else:
+                comparison_matrix[i, j] = np.nan
+    return pd.DataFrame(comparison_matrix, index=model_names, columns=model_names)
+
+
+def calculate_bic_scores(results: list[dict]) -> pd.DataFrame:
+    """Return a DataFrame of BIC scores for model-fit summaries."""
+    names, bics = [], []
+    for model in results:
+        k = len(model["free"])
+        ll = np.sum(model["fitness"])
+        n = len(model["fitness"])
+        bic = k * np.log(n) - 2 * ll
+        names.append(model["name"])
+        bics.append(bic)
+    df = pd.DataFrame({"Model": names, "BIC": bics})
+    return df.sort_values(by="BIC", ascending=False)
+
+
+def calculate_aic(results: list[dict]) -> pd.DataFrame:
+    """Return a DataFrame of AIC scores for model-fit summaries."""
+    aics, names = [], []
+    for model in results:
+        k = len(model["free"])
+        ll = np.sum(model["fitness"])
+        aic = 2 * k - 2 * ll
+        aics.append(aic)
+        names.append(model["name"])
+    df = pd.DataFrame({"Model": names, "AIC": aics})
+    return df.sort_values(by="AIC", ascending=True)
+
+
+def calculate_aic_weights(results: list[dict]) -> pd.DataFrame:
+    """Return a DataFrame of AICw scores for model-fit summaries."""
+    aics, names = [], []
+    for model in results:
+        k = len(model["free"])
+        n_subjects = len(model["fitness"])
+        total_nll = sum(model["fitness"])
+        aic = 2 * k * n_subjects + 2 * total_nll
+        aics.append(aic)
+        names.append(model["name"])
+    aics_arr = np.array(aics)
+    delta_aic = aics_arr - np.min(aics_arr)
+    weights = np.exp(-0.5 * delta_aic)
+    aic_weights = weights / np.sum(weights)
+    df = pd.DataFrame({"Model": names, "AICw": aic_weights})
+    return df.sort_values(by="AICw", ascending=False)
