@@ -1,5 +1,4 @@
 version = 1
-revision = 1
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -389,47 +388,53 @@ source = { editable = "." }
 dependencies = [
     { name = "h5py" },
     { name = "jax" },
+    { name = "jaxcmr" },
     { name = "jaxtyping" },
     { name = "matplotlib" },
     { name = "numba" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "scipy" },
+    { name = "seaborn" },
     { name = "simple-pytree" },
     { name = "tabulate" },
     { name = "tqdm" },
 ]
 
-[package.dev-dependencies]
+[package.optional-dependencies]
 dev = [
     { name = "ipykernel" },
     { name = "papermill" },
     { name = "ruff" },
-    { name = "vulture" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "cru-to-cmr", extra = ["dev"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "h5py", specifier = ">=3.12.1" },
+    { name = "ipykernel", marker = "extra == 'dev'", specifier = ">=6.29.0" },
     { name = "jax", specifier = ">=0.4.38" },
+    { name = "jaxcmr", editable = "../jaxcmr" },
     { name = "jaxtyping", specifier = ">=0.2.36" },
-    { name = "matplotlib" },
+    { name = "matplotlib", specifier = ">=3.10.0" },
     { name = "numba", specifier = ">=0.61.0" },
-    { name = "numpy" },
+    { name = "numpy", specifier = ">=2.0.0" },
     { name = "pandas", specifier = ">=3.0.1" },
+    { name = "papermill", marker = "extra == 'dev'", specifier = ">=2.6.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.0" },
     { name = "scipy", specifier = "==1.15.0" },
+    { name = "seaborn", specifier = ">=0.13.2" },
     { name = "simple-pytree", specifier = ">=0.2.2" },
     { name = "tabulate", specifier = ">=0.9.0" },
     { name = "tqdm", specifier = ">=4.67.1" },
 ]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "ipykernel", specifier = ">=6.29.0" },
-    { name = "papermill", specifier = ">=2.6.0" },
-    { name = "ruff", specifier = ">=0.9.0" },
-    { name = "vulture", specifier = ">=2.14" },
-]
+dev = [{ name = "cru-to-cmr", extras = ["dev"] }]
 
 [[package]]
 name = "cycler"
@@ -750,6 +755,47 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/25/4d/f45853fdc2b811e78b866d5f80b8a21a848278361f66c066706132f415cf/jax-0.9.1.tar.gz", hash = "sha256:ce1b82477ee192f0b1d9801b095aa0cf3839bc1fe0cbc071c961a24b3ff30361", size = 2625994 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/80/e4/88778c6a23b65224e5088e68fd0924e5bde2196a26e76edb3ea3543fed6a/jax-0.9.1-py3-none-any.whl", hash = "sha256:d11cb53d362912253013e8c4d6926cb9f3a4b59ab5b25a7dc08123567067d088", size = 3062162 },
+]
+
+[[package]]
+name = "jaxcmr"
+version = "0.1.1"
+source = { editable = "../jaxcmr" }
+dependencies = [
+    { name = "h5py" },
+    { name = "jax" },
+    { name = "jaxtyping" },
+    { name = "numba" },
+    { name = "scipy" },
+    { name = "simple-pytree" },
+    { name = "tabulate" },
+    { name = "tqdm" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "h5py", specifier = ">=3.12.1" },
+    { name = "jax", specifier = ">=0.4.38" },
+    { name = "jaxtyping", specifier = ">=0.2.36" },
+    { name = "numba", specifier = ">=0.61.0" },
+    { name = "scipy", specifier = "==1.15.0" },
+    { name = "simple-pytree", specifier = ">=0.2.2" },
+    { name = "tabulate", specifier = ">=0.9.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "ipykernel", specifier = ">=6.29.5" },
+    { name = "ipython", specifier = ">=8.31.0" },
+    { name = "jupytext", specifier = ">=1.16.7" },
+    { name = "line-profiler", specifier = ">=4.2.0" },
+    { name = "nbdev", specifier = ">=2.3.37" },
+    { name = "papermill", specifier = ">=2.6.0" },
+    { name = "psifr", specifier = ">=0.9.3" },
+    { name = "pytest", specifier = ">=8.3.5" },
+    { name = "seaborn", specifier = ">=0.13.2" },
+    { name = "sentence-transformers", specifier = ">=5.1.0" },
 ]
 
 [[package]]
@@ -1922,6 +1968,20 @@ wheels = [
 ]
 
 [[package]]
+name = "seaborn"
+version = "0.13.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "matplotlib" },
+    { name = "numpy" },
+    { name = "pandas" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/86/59/a451d7420a77ab0b98f7affa3a1d78a313d2f7281a57afb1a34bae8ab412/seaborn-0.13.2.tar.gz", hash = "sha256:93e60a40988f4d65e9f4885df477e2fdaff6b73a9ded434c1ab356dd57eefff7", size = 1457696 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/83/11/00d3c3dfc25ad54e731d91449895a79e4bf2384dc3ac01809010ba88f6d5/seaborn-0.13.2-py3-none-any.whl", hash = "sha256:636f8336facf092165e27924f223d3c62ca560b1f2bb5dff7ab7fad265361987", size = 294914 },
+]
+
+[[package]]
 name = "simple-pytree"
 version = "0.2.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2039,15 +2099,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/c7/24/5f1b3bdffd70275f6661c76461e25f024d5a38a46f04aaca912426a2b1d3/urllib3-2.6.3.tar.gz", hash = "sha256:1b62b6884944a57dbe321509ab94fd4d3b307075e0c2eae991ac71ee15ad38ed", size = 435556 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/39/08/aaaad47bc4e9dc8c725e68f9d04865dbcb2052843ff09c97b08904852d84/urllib3-2.6.3-py3-none-any.whl", hash = "sha256:bf272323e553dfb2e87d9bfd225ca7b0f467b919d7bbd355436d3fd37cb0acd4", size = 131584 },
-]
-
-[[package]]
-name = "vulture"
-version = "2.15"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/59/c6/4f147b621b4c0899eb1770f98113334bb706ebd251ac2be979316b1985fa/vulture-2.15.tar.gz", hash = "sha256:f9d8b4ce29c69950d323f21dceab4a4d6c694403dffbed7713c4691057e561fe", size = 52438 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/1c/f3/07cf122e145bc6df976030e9935123124c3fcb5044cf407b5e71e85821b4/vulture-2.15-py3-none-any.whl", hash = "sha256:a3d8ebef918694326620eb128fa783486c8d285b23381c2b457d864ac056ef8d", size = 26895 },
 ]
 
 [[package]]

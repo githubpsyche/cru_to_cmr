@@ -13,15 +13,15 @@ from jax import lax, vmap
 from jax import numpy as jnp
 from simple_pytree import Pytree
 
-from cru_to_cmr.math import (
+from jaxcmr.math import (
     exponential_primacy_decay,
     lb,
     power_scale,
 )
-import cru_to_cmr.components.context as TemporalContext
-import cru_to_cmr.components.linear_memory as LinearMemory
-from cru_to_cmr.components.termination import PositionalTermination
-from cru_to_cmr.typing import (
+import jaxcmr.components.context as TemporalContext
+import jaxcmr.components.linear_memory as LinearMemory
+from jaxcmr.components.termination import PositionalTermination
+from jaxcmr.typing import (
     Array,
     Float,
     Float_,
