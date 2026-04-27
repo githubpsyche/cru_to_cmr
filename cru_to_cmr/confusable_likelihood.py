@@ -6,13 +6,12 @@ computing likelihoods under an error-tolerant retrieval model.
 
 """
 
-from typing import Callable, Iterable, Mapping, Optional, Type
+from typing import Iterable, Mapping, Optional, Type
 
-import numpy as np
-from jax import jit, lax, vmap
+from jax import lax, vmap
 from jax import numpy as jnp
 
-from jaxcmr.helpers import all_rows_identical, log_likelihood
+from jaxcmr.helpers import log_likelihood
 from jaxcmr.typing import (
     Array,
     Float,
@@ -26,7 +25,7 @@ from jaxcmr.typing import (
 
 __all__ = [
     "predict_and_simulate_recalls",
-    "MemorySearchLikelihoodFnGenerator",
+    "MemorySearchLikelihoodLoss",
 ]
 
 def predict_and_simulate_recalls(
@@ -43,10 +42,10 @@ def predict_and_simulate_recalls(
     )
 
 
-class MemorySearchLikelihoodFnGenerator:
+class MemorySearchLikelihoodLoss:
     def __init__(
         self,
-        model_factory: Type[MemorySearchModelFactory],
+        model_factory_cls: Type[MemorySearchModelFactory],
         dataset: RecallDataset,
         features: Optional[Float[Array, " word_pool_items features_count"]],
     ) -> None:
@@ -55,7 +54,7 @@ class MemorySearchLikelihoodFnGenerator:
         assert "pres_itemids" in dataset
         assert "rec_itemids" in dataset
 
-        self.factory = model_factory(dataset, features)
+        self.factory = model_factory_cls(dataset, features)
         self.create_model = self.factory.create_trial_model
         self.present_lists = jnp.array(dataset["pres_itemids"])
         self.trials = jnp.array(dataset["rec_itemids"])
@@ -128,46 +127,27 @@ class MemorySearchLikelihoodFnGenerator:
         self,
         trial_indices: Integer[Array, " trials"],
         base_params: Mapping[str, Float_],
-        free_params: Iterable[str],
-    ) -> Callable[[np.ndarray], Float[Array, ""]]:
-        """
-        Return a loss function that:
-          1. Checks if all present-lists are identical for the selected trials.
-          2. Chooses either the 'base' approach (single initial model) or the
-             'present-and-predict' approach (fresh model per trial).
-          3. Expects an array of parameter values (single set or multiple sets).
-        """
-        # Decide which approach to use, based on whether all present-lists match
-        if all_rows_identical(self.present_lists[trial_indices]):
-            base_loss_fn = self.base_predict_trials_loss
-        else:
-            base_loss_fn = self.present_and_predict_trials_loss
+        free_param_names: Iterable[str],
+        x: jnp.ndarray,
+    ) -> Float[Array, " n_samples"]:
+        """Returns one loss per parameter vector."""
+        free_param_names = tuple(free_param_names)
 
-        def specialized_loss_fn(params: Mapping[str, Float_]) -> Float[Array, ""]:
-            """Combine base_params and dynamic params, compute negative log-likelihood."""
-            return base_loss_fn(trial_indices, {**base_params, **params})
+        selected_lists = self.present_lists[trial_indices]
+        use_base_loss = jnp.all(selected_lists == selected_lists[0])
 
-        @jit
-        def single_param_loss(x: jnp.ndarray) -> Float[Array, ""]:
-            """
-            x is shape (n_params,) for a single set of free parameters.
-            """
-            param_dict = {key: x[i] for i, key in enumerate(free_params)}
-            return specialized_loss_fn(param_dict)
+        def loss_for_one_sample(x_row: jnp.ndarray) -> Float[Array, ""]:
+            param_dict = {key: x_row[i] for i, key in enumerate(free_param_names)}
+            params = {**base_params, **param_dict}
+            return lax.cond(
+                use_base_loss,
+                lambda _: self.base_predict_trials_loss(trial_indices, params),
+                lambda _: self.present_and_predict_trials_loss(trial_indices, params),
+                operand=None,
+            )
 
-        @jit
-        def multi_param_loss(x: jnp.ndarray) -> Float[Array, " n_samples"]:
-            """
-            x is shape (n_samples, n_params) for multiple sets of free parameters.
-            We'll vectorize over the first axis, returning shape (n_samples,).
-            """
+        return vmap(loss_for_one_sample, in_axes=1)(x)
 
-            def loss_for_one_sample(x_row: jnp.ndarray) -> Float[Array, ""]:
-                param_dict = {key: x_row[i] for i, key in enumerate(free_params)}
-                return specialized_loss_fn(param_dict)
 
-            # vmap applies loss_for_one_sample across the leading dimension of x
-            return vmap(loss_for_one_sample, in_axes=1)(x)
-
-        # Return a function that checks the dimensionality of x at runtime
-        return lambda x: multi_param_loss(x) if x.ndim > 1 else single_param_loss(x)
+# Compatibility aliases. Do not use in new code.
+MemorySearchLikelihoodFnGenerator = MemorySearchLikelihoodLoss

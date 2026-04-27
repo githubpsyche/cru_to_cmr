@@ -129,7 +129,7 @@ local under `cru_to_cmr`.
 Concrete project-side change:
 
 - treat the project-local modules as the authoritative import paths:
-  - `cru_to_cmr.confusable_likelihood.MemorySearchLikelihoodFnGenerator`
+  - `cru_to_cmr.confusable_likelihood.MemorySearchLikelihoodLoss`
   - `cru_to_cmr.confusable_simulation.simulate_study_and_free_recall`
 - generate those paths directly into `loss_fn_path` and `sim_alg_path`
 

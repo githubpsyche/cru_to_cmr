@@ -122,12 +122,12 @@ class MemorySearchSimulator:
 
     def __init__(
         self,
-        model_factory: Type[MemorySearchModelFactory],
+        model_factory_cls: Type[MemorySearchModelFactory],
         dataset: RecallDataset,
         features: Optional[Float[Array, " word_pool_items features_count"]],
     ) -> None:
         """Initialize the factory with the specified trials and trial data."""
-        factory = model_factory(dataset, features)
+        factory = model_factory_cls(dataset, features)
         self.create_model = factory.create_trial_model
         self.present_lists = jnp.array(dataset["pres_itemids"])
         self.empty = jnp.zeros(dataset["recalls"].shape[-1], jnp.int32)
@@ -196,7 +196,7 @@ def preallocate_for_h5_dataset(
 
 
 def simulate_h5_from_h5(
-    model_factory: Type[MemorySearchModelFactory],
+    model_factory_cls: Type[MemorySearchModelFactory],
     dataset: RecallDataset,
     features: Optional[Float[Array, " word_pool_items features_count"]],
     parameters: dict[str, Float[Array, " subject_count"]],
@@ -209,7 +209,7 @@ def simulate_h5_from_h5(
     Simulates dataset from existing dataset using a memory search model parameterized by subject.
 
     Args:
-        model_factory: Factory class for creating memory search model instances.
+        model_factory_cls: Factory class for creating memory search model instances.
         dataset: Original H5 dataset containing trial data.
         features: Optional feature matrix describing word-pool items.
         parameters: Dictionary of simulation parameters, parameterized per subject.
@@ -220,7 +220,7 @@ def simulate_h5_from_h5(
     """
 
     sim_h5 = preallocate_for_h5_dataset(dataset, trial_mask, experiment_count)
-    simulator = MemorySearchSimulator(model_factory, sim_h5, features)
+    simulator = MemorySearchSimulator(model_factory_cls, sim_h5, features)
 
     # Flat trial + subject index vectors (static shapes)
     total_trials = sim_h5["subject"].size
@@ -248,7 +248,7 @@ def simulate_h5_from_h5(
 
 
 def parameter_shifted_simulate_h5_from_h5(
-    model_factory: Type[MemorySearchModelFactory],
+    model_factory_cls: Type[MemorySearchModelFactory],
     dataset: RecallDataset,
     features: Optional[Float[Array, " word_pool_items features_count"]],
     parameters: dict[str, Float[Array, " subject_count"]],
@@ -263,7 +263,7 @@ def parameter_shifted_simulate_h5_from_h5(
     Simulates multiple H5 datasets by systematically varying a specified parameter.
 
     Args:
-        model_factory: Factory class for creating memory search model instances.
+        model_factory_cls: Factory class for creating memory search model instances.
         dataset: Original H5 dataset containing trial data.
         features: Optional feature matrix describing word-pool items.
         parameters: Dictionary of simulation parameters, parameterized per subject.
@@ -287,7 +287,7 @@ def parameter_shifted_simulate_h5_from_h5(
             varied_parameter: jnp.full_like(parameters[varied_parameter], value),
         }
         sim_data = simulate_h5_from_h5(
-            model_factory,
+            model_factory_cls,
             dataset,
             features,
             swept_params,
