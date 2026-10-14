@@ -1,6 +1,7 @@
 ---
 title: "Bridging CRU and CMR in Free and Serial Recall: A Factorial Comparison of Retrieved-Context Models"
 shorttitle: "Bridging CRU and CMR in Free and Serial Recall"
+doi: "10.5406/19398298.138.2.09"
 author: 
   - name: Jordan B Gunn
     affiliations:
